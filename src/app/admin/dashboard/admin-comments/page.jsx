@@ -13,10 +13,10 @@ import {
 } from "recharts";
 
 /**
- * AdminCommentsPage
- * - Adds a "Save All" button to every student card (calls saveClassComments for that class)
- * - Keeps per-student Save (saveSingle) and class-level Save All in header/bottom
- * - Buttons stopPropagation to avoid collapsing the accordion
+ * AdminCommentsPage (fixed)
+ * - Avoids nested <button> by using an accessible div for the accordion header
+ * - Keeps per-student Save + Save All (class) buttons
+ * - High-contrast subject performance chart preserved
  */
 
 function getBand(scoreOutOf50) {
@@ -229,6 +229,16 @@ export default function AdminCommentsPage() {
     }
   }
 
+  // accessible header key handler
+  function handleHeaderKey(e, cls, data) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const next = openClass === cls._id ? null : cls._id;
+      setOpenClass(next);
+      if (!data && next) fetchClassData(cls._id);
+    }
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="relative overflow-hidden rounded-xl border border-slate-700">
@@ -254,7 +264,6 @@ export default function AdminCommentsPage() {
           const data = dataMap[cls._id];
           const loading = loadingMap[cls._id];
           const saving = savingMap[cls._id];
-
           const completedCount = data
             ? data.rows.filter((r) => r.comment && r.comment.trim()).length
             : 0;
@@ -265,13 +274,18 @@ export default function AdminCommentsPage() {
               key={cls._id}
               className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden"
             >
-              <button
-                className="w-full flex items-center justify-between p-4 hover:bg-slate-700 transition"
+              {/* Accordion header: use an accessible div instead of button to avoid nested buttons */}
+              <div
+                role="button"
+                tabIndex={0}
+                className="w-full flex items-center justify-between p-4 hover:bg-slate-700 transition cursor-pointer"
                 onClick={() => {
                   const next = isOpen ? null : cls._id;
                   setOpenClass(next);
                   if (!data && next) fetchClassData(cls._id);
                 }}
+                onKeyDown={(e) => handleHeaderKey(e, cls, data)}
+                aria-expanded={isOpen}
               >
                 <div className="text-left">
                   <div className="text-lg font-semibold text-white">
@@ -282,6 +296,7 @@ export default function AdminCommentsPage() {
                     {completedCount}/{total}
                   </div>
                 </div>
+
                 <div className="flex items-center gap-3">
                   {/* Visible Save All at header too (shows only when class open) */}
                   {isOpen && (
@@ -300,7 +315,7 @@ export default function AdminCommentsPage() {
                     {isOpen ? "Collapse" : "Open"}
                   </div>
                 </div>
-              </button>
+              </div>
 
               {isOpen && (
                 <div className="p-4 border-t border-slate-700 space-y-4">
@@ -314,7 +329,7 @@ export default function AdminCommentsPage() {
                     </div>
                   ) : (
                     <>
-                      {/* Top action row (clearly visible) */}
+                      {/* Top action row */}
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-sm text-slate-300">
                           Editing comments for{" "}
@@ -427,7 +442,6 @@ export default function AdminCommentsPage() {
                                             bottom: 40,
                                           }}
                                         >
-                                          {/* stronger grid lines for contrast */}
                                           <CartesianGrid
                                             stroke="#1f2937"
                                             strokeDasharray="4 4"
@@ -461,7 +475,6 @@ export default function AdminCommentsPage() {
                                             radius={[6, 6, 0, 0]}
                                           >
                                             {row.marksBySubject.map((m, i) => (
-                                              // add stroke to each bar to increase contrast
                                               <Cell
                                                 key={`cell-${i}`}
                                                 fill={theme.bar}

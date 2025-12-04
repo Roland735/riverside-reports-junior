@@ -1,57 +1,56 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongoose";
 import Comment from "@/models/Comment";
-import mongoose from "mongoose";
 
 /**
- * POST body:
- * {
- *   classId: "...",           // optional but passed from client
- *   rows: [ { studentId, text, type: 'admin', _commentId? }, ... ]
- * }
- *
- * Response:
- *  { ok: true, updated: [{ studentId, _id, text }, ...] }
+ * Accepts { classId, rows: [{ studentId, text, type, _commentId?, subjectAllocId? }, ...] }
+ * For each row: if _commentId provided => update by _id
+ * else upsert by (studentId + type [+ subjectAllocId if provided])
  */
-
 export async function POST(req) {
-    const body = await req.json().catch(() => ({}));
-    const { rows } = body;
-    if (!Array.isArray(rows) || rows.length === 0) {
-        return NextResponse.json({ error: "rows must be a non-empty array" }, { status: 400 });
-    }
-
-    await dbConnect();
     try {
-        const ops = rows.map((r) => {
-            // if _commentId provided -> update by _id
-            if (r._commentId) {
-                return {
-                    updateOne: {
-                        filter: { _id: mongoose.Types.ObjectId(r._commentId) },
-                        update: { $set: { text: r.text ?? "", updatedAt: new Date() } },
-                    },
-                };
+        const body = await req.json();
+        const { classId, rows } = body;
+        if (!rows || !Array.isArray(rows)) {
+            return NextResponse.json({ error: "rows must be an array" }, { status: 400 });
+        }
+
+        await dbConnect();
+
+        const updated = [];
+
+        for (const r of rows) {
+            const studentId = r.studentId;
+            const text = r.text ?? "";
+            const type = r.type ?? "admin";
+            const subjectAllocId = r.subjectAllocId ?? undefined;
+            const _commentId = r._commentId ?? undefined;
+
+            if (_commentId) {
+                // update by id
+                const doc = await Comment.findByIdAndUpdate(
+                    _commentId,
+                    { text },
+                    { new: true }
+                ).lean();
+                if (doc) updated.push(doc);
+                continue;
             }
-            // otherwise upsert by studentId + type + subjectAllocId (admin comments have no subjectAllocId)
-            const filter = { studentId: r.studentId, type: r.type ?? "admin" };
-            return {
-                updateOne: {
-                    filter,
-                    update: { $set: { text: r.text ?? "", type: r.type ?? "admin", studentId: r.studentId, updatedAt: new Date() } },
-                    upsert: true,
-                },
-            };
-        });
 
-        const bulk = await Comment.bulkWrite(ops, { ordered: false });
-        // After bulkWrite, fetch the resulting/affected documents for returning _ids and text:
-        const studentIds = rows.map((r) => r.studentId);
-        const docs = await Comment.find({ studentId: { $in: studentIds }, type: "admin" }).lean();
+            // build filter for upsert
+            const filter = { studentId, type };
+            if (subjectAllocId) filter.subjectAllocId = subjectAllocId;
 
-        const updated = docs.map((d) => ({ studentId: String(d.studentId), _id: String(d._id), text: d.text }));
+            const doc = await Comment.findOneAndUpdate(
+                filter,
+                { $set: { text, studentId, type, subjectAllocId: subjectAllocId ?? null } },
+                { new: true, upsert: true, setDefaultsOnInsert: true }
+            ).lean();
 
-        return NextResponse.json({ ok: true, updated });
+            if (doc) updated.push(doc);
+        }
+
+        return NextResponse.json({ updated });
     } catch (err) {
         console.error("POST /api/admin/admin-comments/comments/batch error:", err);
         return NextResponse.json({ error: "DB error" }, { status: 500 });

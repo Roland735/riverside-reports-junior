@@ -6,9 +6,8 @@ import Student from "@/models/Student";
 export async function GET() {
     await dbConnect();
     try {
-        // fetch classes and compute studentCount by grade+section
         const classes = await ClassModel.find({}).lean();
-        // compute student counts
+        // compute student counts (grade+section)
         const enhanced = await Promise.all(
             classes.map(async (c) => {
                 const count = await Student.countDocuments({ grade: c.grade, section: c.section });

@@ -21,7 +21,7 @@ import {
 
 /**
  * AdminReportsPage
- * - QR code placed at bottom-right corner of the PDF.
+ * - QR code placed at bottom-right corner of the PDF (drawn after content so it is not covered).
  * - Table header labels use full words (no mid-word splitting).
  * - SUBJECT column reduced; TEACHER'S COMMENT column increased.
  * - Black text in PDF set to a truer/darker black.
@@ -286,19 +286,33 @@ export default function AdminReportsPage() {
         // indent comment lines and add an empty line above and below as spacing
         pdf.text(" ", MARGIN, y + 8); // extra space
         pdf.text(ctLines.map((l) => "  " + l), MARGIN + 12, y + 14);
-        y += ctLines.length * 7 + 22; // increased spacing
+        // increased spacing after class teacher's comment
+        y += ctLines.length * 7 + 32; // gave more vertical gap between CT and head remarks
 
-        // School head's remarks with spacing and indentation
-        pdf.setFont("helvetica", "bold").setFontSize(11);
-        pdf.setTextColor(...PDF_RED);
-        pdf.text("School head’s remarks:", MARGIN, y);
-        pdf.setFont("helvetica", "normal").setFontSize(10);
-        pdf.setTextColor(0, 0, 0);
-        const headText = student.schoolHeadRemarks || "—";
-        const headLines = pdf.splitTextToSize(headText, contentWidth - 24);
-        pdf.text(" ", MARGIN, y + 8); // extra space
-        pdf.text(headLines.map((l) => "  " + l), MARGIN + 12, y + 14);
-        y += headLines.length * 7 + 22;
+        // Determine whether school head's remarks exist — if none or just placeholder, skip printing entirely
+        const rawHead = student.schoolHeadRemarks;
+        const hasHeadRemarks =
+            rawHead &&
+            String(rawHead).trim() !== "" &&
+            String(rawHead).trim() !== "—" &&
+            String(rawHead).trim().toLowerCase() !== "none";
+
+        if (hasHeadRemarks) {
+            // add a bit more space before head remarks to visually separate from class teacher comment
+            y += 8;
+
+            // School head's remarks with spacing and indentation
+            pdf.setFont("helvetica", "bold").setFontSize(11);
+            pdf.setTextColor(...PDF_RED);
+            pdf.text("School head’s remarks:", MARGIN, y);
+            pdf.setFont("helvetica", "normal").setFontSize(10);
+            pdf.setTextColor(0, 0, 0);
+            const headText = String(student.schoolHeadRemarks || "");
+            const headLines = pdf.splitTextToSize(headText, contentWidth - 24);
+            pdf.text(" ", MARGIN, y + 8); // extra space
+            pdf.text(headLines.map((l) => "  " + l), MARGIN + 12, y + 14);
+            y += headLines.length * 7 + 22;
+        }
 
         // performance bands small table
         if (y + 120 > pageH - MARGIN) {
@@ -335,22 +349,28 @@ export default function AdminReportsPage() {
         const titleDividerY = 36;
         pdf.line(36, titleDividerY, pageW - 36, titleDividerY);
 
-        // Place QR at bottom-right corner of the first page
-        const MARGIN = 36;
-        const qrSize = 96;
-        const qrX = pageW - MARGIN - qrSize;
-        const qrY = pageH - MARGIN - qrSize;
-        const qrValue = `https://example.com/student/${student.regNumber}`;
-        await generateQRCode(pdf, qrValue, qrX, qrY, qrSize);
-
         // header start (same value passed to generateTableAndComments below)
         const headerStartY = 64;
+        // render table and comments first (this may add pages)
         await generateTableAndComments(pdf, student, headerStartY);
+
+        // Place QR at bottom-right corner of the current (last) page AFTER content is drawn so it isn't covered
+        try {
+            const MARGIN = 36;
+            const qrSize = 96;
+            const qrX = pageW - MARGIN - qrSize;
+            const qrY = pageH - MARGIN - qrSize;
+            const qrValue = `https://riversidehre.org`;
+            await generateQRCode(pdf, qrValue, qrX, qrY, qrSize);
+        } catch (err) {
+            // if QR fails, don't crash PDF generation
+            console.warn("Failed to draw QR after content:", err);
+        }
     }
 
     async function downloadPDF(student) {
         const pdf = new jsPDF({ unit: "pt", format: "a4" });
-        // Do NOT add QR here; QR is added in generatePDFContent (bottom-right)
+        // Do NOT add QR here; QR is added in generatePDFContent (after content)
         try {
             if (student.schoolLogoUrl) {
                 // place a larger logo top-left as a small visual (commented out — optional)

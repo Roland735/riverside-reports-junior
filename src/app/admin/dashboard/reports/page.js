@@ -51,12 +51,16 @@ export default function AdminReportsPage() {
         });
     }
 
+    // --- IMPORTANT FIX: build class averages from normalized subjects (deduped/aggregated) ---
     const classAvgMap = useMemo(() => {
-        const allRaw = reports.flatMap((r) => r.subjects || []);
-        const grouped = groupBy(allRaw, (s) => s.name);
+        // Use normalizeSubjects so duplicates in raw subject lists don't inflate averages
+        const allNormalized = reports.flatMap((r) => normalizeSubjects(r.subjects || []));
+        const grouped = groupBy(allNormalized, (s) => s.name);
         return Object.fromEntries(
             Object.entries(grouped).map(([name, entries]) => {
-                const avg = Math.round(entries.reduce((sum, e) => sum + (Number(e.finalMark) || 0), 0) / Math.max(1, entries.length));
+                const avg = Math.round(
+                    entries.reduce((sum, e) => sum + (Number(e.finalMark) || 0), 0) / Math.max(1, entries.length)
+                );
                 return [name, avg];
             })
         );
@@ -133,6 +137,7 @@ export default function AdminReportsPage() {
     const PDF_RED = [220, 38, 38];
 
     async function generateTableAndComments(pdf, student, startY) {
+        // Use normalized subjects here (deduped & with classAverage)
         const subjects = getSubjectsWithClassAvg(student.subjects || []);
         const pageW = pdf.internal.pageSize.getWidth();
         const pageH = pdf.internal.pageSize.getHeight();
@@ -266,8 +271,8 @@ export default function AdminReportsPage() {
             y = MARGIN;
         }
 
-        // Total Points (right aligned)
-        const totalPoints = (student.subjects || []).reduce((s, sub) => s + (Number(sub.finalMark || 0)), 0);
+        // --- FIX: compute Total Points from the normalized 'subjects' (prevents duplicates doubling totals) ---
+        const totalPoints = (subjects || []).reduce((s, sub) => s + (Number(sub.finalMark || 0)), 0);
         pdf.setFont("helvetica", "bold").setFontSize(11);
         pdf.setTextColor(0, 0, 0);
         const totalText = `Total Points: ${totalPoints}`;

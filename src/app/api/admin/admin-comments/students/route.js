@@ -4,6 +4,7 @@ import ClassModel from "@/models/Class";
 import Student from "@/models/Student";
 import Mark from "@/models/Mark";
 import Comment from "@/models/Comment";
+import SubjectAllocation from "@/models/SubjectAllocation";
 
 /**
  * GET /api/admin/admin-comments/students?classId=...

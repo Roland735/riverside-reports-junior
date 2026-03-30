@@ -35,14 +35,14 @@ function BandPill({ score }) {
   const colour = label.startsWith("A")
     ? "bg-green-600 text-white"
     : label.startsWith("B")
-    ? "bg-emerald-500 text-white"
-    : label.startsWith("C")
-    ? "bg-yellow-500 text-black"
-    : label.startsWith("D")
-    ? "bg-orange-500 text-black"
-    : label.startsWith("E")
-    ? "bg-red-600 text-white"
-    : "bg-slate-700 text-slate-200";
+      ? "bg-emerald-500 text-white"
+      : label.startsWith("C")
+        ? "bg-yellow-500 text-black"
+        : label.startsWith("D")
+          ? "bg-orange-500 text-black"
+          : label.startsWith("E")
+            ? "bg-red-600 text-white"
+            : "bg-slate-700 text-slate-200";
 
   return (
     <span className={`inline-block text-xs px-2 py-1 rounded ${colour}`}>
@@ -97,8 +97,8 @@ export default function AdminCommentsPage() {
     try {
       const sRes = await fetch(
         `/api/admin/admin-comments/students?classId=${encodeURIComponent(
-          classId
-        )}`
+          classId,
+        )}`,
       );
       if (!sRes.ok) throw new Error("Failed to fetch students");
       const sJson = await sRes.json();
@@ -113,6 +113,7 @@ export default function AdminCommentsPage() {
         marksBySubject: st.marksBySubject ?? [],
         overallOutOf50: st.overallOutOf50 ?? null,
         subjectComments: st.subjectComments ?? [],
+        classTeacherCommentText: st.classTeacherCommentText ?? "",
       }));
 
       const classInfo = {
@@ -160,7 +161,7 @@ export default function AdminCommentsPage() {
       // Merge returned updated records (if any)
       if (json.updated && Array.isArray(json.updated)) {
         const map = Object.fromEntries(
-          json.updated.map((u) => [String(u.studentId), u])
+          json.updated.map((u) => [String(u.studentId), u]),
         );
         setDataMap((m) => {
           const copy = { ...(m[classId] || { rows: [] }) };
@@ -267,7 +268,7 @@ export default function AdminCommentsPage() {
           const completedCount = data
             ? data.rows.filter((r) => r.comment && r.comment.trim()).length
             : 0;
-          const total = data ? data.rows.length : cls.studentCount ?? 0;
+          const total = data ? data.rows.length : (cls.studentCount ?? 0);
 
           return (
             <div
@@ -343,7 +344,7 @@ export default function AdminCommentsPage() {
                               if (!data) return;
                               if (
                                 !confirm(
-                                  "Discard local edits and reload from server?"
+                                  "Discard local edits and reload from server?",
                                 )
                               )
                                 return;
@@ -432,7 +433,7 @@ export default function AdminCommentsPage() {
                                               m.outOf50 ??
                                               Math.round(
                                                 ((m.avgPercentage ?? 0) / 100) *
-                                                  50
+                                                  50,
                                               ),
                                           }))}
                                           margin={{
@@ -528,7 +529,7 @@ export default function AdminCommentsPage() {
                                                 "General") ===
                                               (m.subject ||
                                                 m.subjectName ||
-                                                m.subjectLabel)
+                                                m.subjectLabel),
                                           );
                                           const tComment = tCommentObj
                                             ? tCommentObj.text
@@ -554,14 +555,15 @@ export default function AdminCommentsPage() {
                                                 <div className="text-white font-semibold">
                                                   {m.outOf50 ??
                                                     Math.round(
-                                                      (m.avgPercentage ?? 0) / 2
+                                                      (m.avgPercentage ?? 0) /
+                                                        2,
                                                     )}
                                                 </div>
                                                 <div className="text-slate-400 text-xs mt-1">
                                                   Avg:{" "}
                                                   {m.avgPercentage
                                                     ? `${m.avgPercentage.toFixed(
-                                                        1
+                                                        1,
                                                       )}%`
                                                     : "—"}
                                                 </div>
@@ -585,7 +587,7 @@ export default function AdminCommentsPage() {
                                                     Math.round(
                                                       ((m.avgPercentage ?? 0) /
                                                         100) *
-                                                        50
+                                                        50,
                                                     )
                                                   }
                                                 />
@@ -616,14 +618,14 @@ export default function AdminCommentsPage() {
                                                             {c.percentage
                                                               ?.toFixed
                                                               ? c.percentage.toFixed(
-                                                                  1
+                                                                  1,
                                                                 ) + "%"
                                                               : c.percentage ||
                                                                 ""}
                                                             )
                                                           </div>
                                                         </div>
-                                                      )
+                                                      ),
                                                     )}
                                                   </div>
                                                 ) : null}
@@ -645,6 +647,17 @@ export default function AdminCommentsPage() {
                                   </table>
                                 </div>
 
+                                <div className="mt-3 p-3 rounded-lg border border-slate-700 bg-slate-800/60">
+                                  <div className="text-sm text-slate-300 mb-1">
+                                    Class Teacher's comment
+                                  </div>
+                                  <div className="text-slate-200">
+                                    {row.classTeacherCommentText
+                                      ? row.classTeacherCommentText
+                                      : "—"}
+                                  </div>
+                                </div>
+
                                 {/* admin comment input + per-student actions */}
                                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                                   <textarea
@@ -653,7 +666,7 @@ export default function AdminCommentsPage() {
                                       updateCommentLocal(
                                         cls._id,
                                         idx,
-                                        e.target.value
+                                        e.target.value,
                                       )
                                     }
                                     placeholder="Enter admin comment..."
@@ -668,7 +681,7 @@ export default function AdminCommentsPage() {
                                         saveSingleComment(cls._id, idx);
                                       }}
                                       disabled={Boolean(
-                                        savingSingle[row.studentId]
+                                        savingSingle[row.studentId],
                                       )}
                                       className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded text-white shadow w-full"
                                     >
@@ -702,7 +715,7 @@ export default function AdminCommentsPage() {
                             if (!data) return;
                             if (
                               !confirm(
-                                "Discard local edits and reload from server?"
+                                "Discard local edits and reload from server?",
                               )
                             )
                               return;

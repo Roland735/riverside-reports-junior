@@ -33,10 +33,17 @@ export default function AdminReportsPage() {
     const [classList, setClassList] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedClass, setSelectedClass] = useState("");
-    const isGrade7 = useMemo(() => {
-        const cls = String(selectedClass || "").toLowerCase();
-        return cls.startsWith("grade 7");
-    }, [selectedClass]);
+
+    function isGrade7Class(className) {
+        return /^grade\s*7\b/i.test(String(className || "").trim());
+    }
+
+    function toGrade7OutOf100(mark) {
+        const n = Number(mark ?? 0);
+        if (Number.isNaN(n)) return 0;
+        const asPercentage = n <= 50 ? n * 2 : n;
+        return Math.max(0, Math.min(100, Math.round(asPercentage)));
+    }
 
     function groupBy(arr, fn) {
         return arr.reduce((acc, v) => {
@@ -154,7 +161,7 @@ export default function AdminReportsPage() {
     async function generateTableAndComments(pdf, student, startY) {
         // Use normalized subjects here (deduped & with classAverage)
         const subjects = getSubjectsWithClassAvg(student.subjects || []);
-        const grade7 = String(student.className || "").toLowerCase().startsWith("grade 7");
+        const grade7 = isGrade7Class(student.className);
         const pageW = pdf.internal.pageSize.getWidth();
         const pageH = pdf.internal.pageSize.getHeight();
         const MARGIN = 36; // pt
@@ -251,8 +258,8 @@ export default function AdminReportsPage() {
             // map subjects to columns that match new header order:
             // SUBJECT | MARK OUT OF 50 | CLASS SUBJECT AVERAGE | BAND | TEACHER'S COMMENT
             body: subjects.map((s) => {
-                const markDisplay = grade7 ? (Number(s.finalMark ?? 0) * 2) : Number(s.finalMark ?? 0);
-                const classAvgDisplay = grade7 ? (Number(s.classAverage ?? 0) * 2) : Number(s.classAverage ?? 0);
+                const markDisplay = grade7 ? toGrade7OutOf100(s.finalMark) : Number(s.finalMark ?? 0);
+                const classAvgDisplay = grade7 ? toGrade7OutOf100(s.classAverage) : Number(s.classAverage ?? 0);
                 const bandOrGrade = grade7 ? zimsecGradeFromPercentage(markDisplay) : scoreBand(s.finalMark);
                 return [
                     s.name,
@@ -295,7 +302,7 @@ export default function AdminReportsPage() {
         // --- FIX: compute Total Points from the normalized 'subjects' (prevents duplicates doubling totals) ---
         const totalPoints = (subjects || []).reduce((s, sub) => {
             const v = Number(sub.finalMark || 0);
-            return s + (grade7 ? v * 2 : v);
+            return s + (grade7 ? toGrade7OutOf100(v) : v);
         }, 0);
         pdf.setFont("helvetica", "bold").setFontSize(11);
         pdf.setTextColor(0, 0, 0);
@@ -516,7 +523,7 @@ export default function AdminReportsPage() {
             ) : (
                 reports.map((report) => {
                     const subjects = getSubjectsWithClassAvg(report.subjects || []);
-                    const grade7Class = String(report.className || "").toLowerCase().startsWith("grade 7");
+                    const grade7Class = isGrade7Class(report.className);
                     return (
                         <div key={report.regNumber} className="mb-8 bg-slate-800 p-4 rounded">
                             <div className="flex justify-between items-center">
@@ -544,8 +551,8 @@ export default function AdminReportsPage() {
                                     <RadarChart
                                         data={subjects.map((s) => ({
                                             subject: s.name.substring(0, 12),
-                                            Student: grade7Class ? (Number(s.finalMark ?? 0) * 2) : s.finalMark,
-                                            Class: grade7Class ? (Number(s.classAverage ?? 0) * 2) : s.classAverage,
+                                            Student: grade7Class ? toGrade7OutOf100(s.finalMark) : s.finalMark,
+                                            Class: grade7Class ? toGrade7OutOf100(s.classAverage) : s.classAverage,
                                         }))}
                                     >
                                         <PolarGrid />
@@ -580,12 +587,12 @@ export default function AdminReportsPage() {
                                     {subjects.map((s, i) => (
                                         <tr key={i} className={i % 2 ? "bg-slate-800" : ""}>
                                             <td className="p-2">{s.name}</td>
-                                            <td className="p-2 text-center">{grade7Class ? (Number(s.finalMark ?? 0) * 2) : s.finalMark}</td>
-                                            <td className="p-2 text-center">{grade7Class ? (Number(s.classAverage ?? 0) * 2) : s.classAverage}</td>
+                                            <td className="p-2 text-center">{grade7Class ? toGrade7OutOf100(s.finalMark) : s.finalMark}</td>
+                                            <td className="p-2 text-center">{grade7Class ? toGrade7OutOf100(s.classAverage) : s.classAverage}</td>
                                             <td className="p-2">
                                                 {grade7Class ? (
                                                     <span className="px-2 py-0.5 rounded text-xs bg-slate-600 text-white">
-                                                        {zimsecGradeFromPercentage(Number(s.finalMark ?? 0) * 2)}
+                                                        {zimsecGradeFromPercentage(toGrade7OutOf100(s.finalMark))}
                                                     </span>
                                                 ) : (
                                                     <span className={`px-2 py-0.5 rounded text-xs ${bandBadgeClass(scoreBand(s.finalMark))}`}>

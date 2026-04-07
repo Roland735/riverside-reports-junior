@@ -4,7 +4,6 @@ import ClassModel from "@/models/Class";
 import Student from "@/models/Student";
 import Mark from "@/models/Mark";
 import Comment from "@/models/Comment";
-import SubjectAllocation from "@/models/SubjectAllocation";
 
 /**
  * GET /api/admin/admin-comments/students?classId=...
@@ -81,11 +80,6 @@ export async function GET(req) {
             type: "admin",
         }).lean();
 
-        const classTeacherComments = await Comment.find({
-            studentId: { $in: studentIds },
-            type: "classteacher",
-        }).lean();
-
         // Build marks map per student -> subjectName -> list of percentages
         const marksMap = {}; // marksMap[studentId][subjectName] = { label, values: [], components: [] }
         for (const m of marks) {
@@ -135,20 +129,6 @@ export async function GET(req) {
             }
         }
 
-        const classTeacherCommentMap = {};
-        for (const c of classTeacherComments) {
-            const sid = String(c.studentId);
-            if (!classTeacherCommentMap[sid]) classTeacherCommentMap[sid] = c;
-            else {
-                const prev = classTeacherCommentMap[sid];
-                const prevTime = prev?.updatedAt ?? prev?.createdAt ?? null;
-                const curTime = c?.updatedAt ?? c?.createdAt ?? null;
-                if (curTime && prevTime && new Date(curTime) > new Date(prevTime)) {
-                    classTeacherCommentMap[sid] = c;
-                }
-            }
-        }
-
         // Build output students
         const outStudents = students.map((st) => {
             const sid = String(st._id);
@@ -188,8 +168,6 @@ export async function GET(req) {
                 subjectComments: subjCommentMap[sid] || [],
                 adminCommentId: adminCommentMap[sid]?._id ?? null,
                 adminCommentText: adminCommentMap[sid]?.text ?? "",
-                classTeacherCommentId: classTeacherCommentMap[sid]?._id ?? null,
-                classTeacherCommentText: classTeacherCommentMap[sid]?.text ?? "",
             };
         });
 

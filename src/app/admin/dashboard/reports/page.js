@@ -33,6 +33,10 @@ export default function AdminReportsPage() {
     const [classList, setClassList] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedClass, setSelectedClass] = useState("");
+    const isGrade7 = useMemo(() => {
+        const cls = String(selectedClass || "").toLowerCase();
+        return cls.startsWith("grade 7");
+    }, [selectedClass]);
 
     function groupBy(arr, fn) {
         return arr.reduce((acc, v) => {
@@ -79,6 +83,17 @@ export default function AdminReportsPage() {
         if (m >= 30 && m <= 34) return "Good";
         if (m >= 20 && m <= 29) return "Aspiring";
         return "Basic";
+    }
+
+    function zimsecGradeFromPercentage(pct) {
+        const m = Number(pct ?? 0);
+        if (m >= 90) return "A*";
+        if (m >= 80) return "A";
+        if (m >= 70) return "B";
+        if (m >= 60) return "C";
+        if (m >= 50) return "D";
+        if (m >= 40) return "E";
+        return "U";
     }
 
     function bandBadgeClass(band) {
@@ -139,6 +154,7 @@ export default function AdminReportsPage() {
     async function generateTableAndComments(pdf, student, startY) {
         // Use normalized subjects here (deduped & with classAverage)
         const subjects = getSubjectsWithClassAvg(student.subjects || []);
+        const grade7 = String(student.className || "").toLowerCase().startsWith("grade 7");
         const pageW = pdf.internal.pageSize.getWidth();
         const pageH = pdf.internal.pageSize.getHeight();
         const MARGIN = 36; // pt
@@ -226,21 +242,26 @@ export default function AdminReportsPage() {
             head: [
                 [
                     { content: "SUBJECT", styles: { halign: "left" } },
-                    { content: "MARK\nOUT\nOF 50", styles: { halign: "center" } },
+                    { content: grade7 ? "MARK\nOUT\nOF 100" : "MARK\nOUT\nOF 50", styles: { halign: "center" } },
                     { content: "CLASS SUBJECT AVERAGE", styles: { halign: "center" } }, // full words
-                    { content: "BAND", styles: { halign: "center" } },
+                    { content: grade7 ? "GRADE" : "BAND", styles: { halign: "center" } },
                     { content: "TEACHER'S\nCOMMENT", styles: { halign: "left" } },
                 ],
             ],
             // map subjects to columns that match new header order:
             // SUBJECT | MARK OUT OF 50 | CLASS SUBJECT AVERAGE | BAND | TEACHER'S COMMENT
-            body: subjects.map((s) => [
-                s.name,
-                String(s.finalMark ?? ""),
-                String(s.classAverage ?? ""),
-                scoreBand(s.finalMark),
-                s.subjectTeacherComment || "—",
-            ]),
+            body: subjects.map((s) => {
+                const markDisplay = grade7 ? (Number(s.finalMark ?? 0) * 2) : Number(s.finalMark ?? 0);
+                const classAvgDisplay = grade7 ? (Number(s.classAverage ?? 0) * 2) : Number(s.classAverage ?? 0);
+                const bandOrGrade = grade7 ? zimsecGradeFromPercentage(markDisplay) : scoreBand(s.finalMark);
+                return [
+                    s.name,
+                    String(markDisplay),
+                    String(classAvgDisplay),
+                    bandOrGrade,
+                    s.subjectTeacherComment || "—",
+                ];
+            }),
             styles: {
                 fontSize: 10,
                 cellPadding: 6,
@@ -272,7 +293,10 @@ export default function AdminReportsPage() {
         }
 
         // --- FIX: compute Total Points from the normalized 'subjects' (prevents duplicates doubling totals) ---
-        const totalPoints = (subjects || []).reduce((s, sub) => s + (Number(sub.finalMark || 0)), 0);
+        const totalPoints = (subjects || []).reduce((s, sub) => {
+            const v = Number(sub.finalMark || 0);
+            return s + (grade7 ? v * 2 : v);
+        }, 0);
         pdf.setFont("helvetica", "bold").setFontSize(11);
         pdf.setTextColor(0, 0, 0);
         const totalText = `Total Points: ${totalPoints}`;
@@ -326,14 +350,24 @@ export default function AdminReportsPage() {
         }
         autoTable(pdf, {
             startY: y,
-            head: [["Score", "Band"]],
-            body: [
-                ["45-50", "Outstanding"],
-                ["35-44", "High"],
-                ["30-34", "Good"],
-                ["20-29", "Aspiring"],
-                ["0-19", "Basic"],
-            ],
+            head: [[grade7 ? "Percentage" : "Score", grade7 ? "ZIMSEC Grade" : "Band"]],
+            body: grade7
+                ? [
+                    [">= 90%", "A*"],
+                    ["80–89%", "A"],
+                    ["70–79%", "B"],
+                    ["60–69%", "C"],
+                    ["50–59%", "D"],
+                    ["40–49%", "E"],
+                    ["< 40%", "U"],
+                  ]
+                : [
+                    ["45-50", "Outstanding"],
+                    ["35-44", "High"],
+                    ["30-34", "Good"],
+                    ["20-29", "Aspiring"],
+                    ["0-19", "Basic"],
+                  ],
             styles: { fontSize: 10, cellPadding: 6, textColor: [0, 0, 0] },
             theme: "grid",
             headStyles: { fillColor: PDF_RED, textColor: [255, 255, 255], fontStyle: "bold" },
@@ -482,6 +516,7 @@ export default function AdminReportsPage() {
             ) : (
                 reports.map((report) => {
                     const subjects = getSubjectsWithClassAvg(report.subjects || []);
+                    const grade7Class = String(report.className || "").toLowerCase().startsWith("grade 7");
                     return (
                         <div key={report.regNumber} className="mb-8 bg-slate-800 p-4 rounded">
                             <div className="flex justify-between items-center">
@@ -509,13 +544,13 @@ export default function AdminReportsPage() {
                                     <RadarChart
                                         data={subjects.map((s) => ({
                                             subject: s.name.substring(0, 12),
-                                            Student: s.finalMark,
-                                            Class: s.classAverage,
+                                            Student: grade7Class ? (Number(s.finalMark ?? 0) * 2) : s.finalMark,
+                                            Class: grade7Class ? (Number(s.classAverage ?? 0) * 2) : s.classAverage,
                                         }))}
                                     >
                                         <PolarGrid />
                                         <PolarAngleAxis dataKey="subject" />
-                                        <PolarRadiusAxis domain={[0, 50]} />
+                                        <PolarRadiusAxis domain={grade7Class ? [0, 100] : [0, 50]} />
                                         <Radar name="Student" dataKey="Student" stroke="#b91c1c" fill="#b91c1c" fillOpacity={0.45} />
                                         <Radar name="Class" dataKey="Class" stroke="#fca5a5" fill="#fca5a5" fillOpacity={0.25} />
                                         <Legend />
@@ -530,14 +565,14 @@ export default function AdminReportsPage() {
                                         <th className="p-2 text-center">
                                             MARK<br />
                                             OUT<br />
-                                            OF 50
+                                            {grade7Class ? "OF 100" : "OF 50"}
                                         </th>
                                         <th className="p-2 text-center">
                                             CLASS<br />
                                             SUBJECT<br />
                                             AVERAGE
                                         </th>
-                                        <th className="p-2">Band</th>
+                                        <th className="p-2">{grade7Class ? "Grade" : "Band"}</th>
                                         <th className="p-2">Teacher Comment</th>
                                     </tr>
                                 </thead>
@@ -545,12 +580,18 @@ export default function AdminReportsPage() {
                                     {subjects.map((s, i) => (
                                         <tr key={i} className={i % 2 ? "bg-slate-800" : ""}>
                                             <td className="p-2">{s.name}</td>
-                                            <td className="p-2 text-center">{s.finalMark}</td>
-                                            <td className="p-2 text-center">{s.classAverage}</td>
+                                            <td className="p-2 text-center">{grade7Class ? (Number(s.finalMark ?? 0) * 2) : s.finalMark}</td>
+                                            <td className="p-2 text-center">{grade7Class ? (Number(s.classAverage ?? 0) * 2) : s.classAverage}</td>
                                             <td className="p-2">
-                                                <span className={`px-2 py-0.5 rounded text-xs ${bandBadgeClass(scoreBand(s.finalMark))}`}>
-                                                    {scoreBand(s.finalMark)}
-                                                </span>
+                                                {grade7Class ? (
+                                                    <span className="px-2 py-0.5 rounded text-xs bg-slate-600 text-white">
+                                                        {zimsecGradeFromPercentage(Number(s.finalMark ?? 0) * 2)}
+                                                    </span>
+                                                ) : (
+                                                    <span className={`px-2 py-0.5 rounded text-xs ${bandBadgeClass(scoreBand(s.finalMark))}`}>
+                                                        {scoreBand(s.finalMark)}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="p-2">{s.subjectTeacherComment}</td>
                                         </tr>
